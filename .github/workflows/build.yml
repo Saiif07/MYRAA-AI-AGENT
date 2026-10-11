@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      # 3. Test Python backend
+      # 3. Test backend
       - name: Backend self-test
         run: python myraa.py test
 
@@ -34,61 +34,50 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # 5. Setup Android SDK
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      # 5. Setup Android SDK without setup-android action
+      - name: Configure Android SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
 
-      # 6. Install Android SDK packages
+      # 6. Install required SDK packages
       - name: Install Android SDK packages
         run: |
-          sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-          yes | sdkmanager --licenses
+          sdkmanager --sdk_root="$ANDROID_HOME" --install \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
 
-      # 7. Setup Gradle
+      # 7. Accept SDK licenses
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses
+
+      # 8. Setup Gradle
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.7"
 
-      # 8. Build debug APK
+      # 9. Build APK
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon --stacktrace
 
-      # 9. Verify APK exists
+      # 10. Verify APK
       - name: Verify APK
         run: |
-          if [ ! -f app/build/outputs/apk/debug/app-debug.apk ]; then
-            echo "ERROR: Debug APK was not generated."
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          if [ ! -f "$APK" ]; then
+            echo "ERROR: APK was not generated."
             exit 1
           fi
-          ls -lh app/build/outputs/apk/debug/app-debug.apk
+          ls -lh "$APK"
 
-      # 10. Upload APK artifact
+      # 11. Upload APK
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: myraa-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-          retention-days: 7
-
-      # 11. Generate Gradle wrapper files
-      - name: Generate Gradle wrapper
-        if: success()
-        continue-on-error: true
-        run: gradle wrapper --gradle-version 8.7
-
-      # 12. Upload Gradle wrapper files
-      - name: Upload Gradle wrapper files
-        if: success()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-wrapper-files
-          path: |
-            gradlew
-            gradlew.bat
-            gradle/wrapper/gradle-wrapper.jar
-            gradle/wrapper/gradle-wrapper.properties
-          if-no-files-found: warn
           retention-days: 7
