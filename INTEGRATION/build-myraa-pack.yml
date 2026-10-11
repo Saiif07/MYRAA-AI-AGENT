@@ -1,0 +1,24 @@
+name: Build MYRAA pack APK
+on: [workflow_dispatch, push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: myraa-pack
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Backend + frontend self-test
+        run: python myraa.py test
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.7", build-root-directory: myraa-pack }
+      - run: gradle :app:assembleDebug --no-daemon --stacktrace
+      - name: Check the APK exists and is not empty
+        run: test -s app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: myraa-pack-debug-apk, path: myraa-pack/app/build/outputs/apk/debug/*.apk }
