@@ -1,0 +1,90 @@
+import type {
+	BreakingChangeLightReportResult,
+	BreakingChangeRuleDetailResult,
+	BreakingChangeVersion,
+	MigrationFindingTriageStatus,
+	MigrationWorkflowOwnerResponse,
+	WorkflowMigrationResult,
+} from '@n8n/api-types';
+
+import type { IRestApiContext } from '../types';
+import { makeRestApiRequest, get } from '../utils';
+
+type BreakingChangeQuery = {
+	version?: BreakingChangeVersion;
+};
+
+export async function getReport(
+	context: IRestApiContext,
+	query?: BreakingChangeQuery,
+): Promise<BreakingChangeLightReportResult> {
+	return (await get(context.baseUrl, '/breaking-changes/report', query)).data;
+}
+
+export async function refreshReport(
+	context: IRestApiContext,
+	query?: BreakingChangeQuery,
+): Promise<BreakingChangeLightReportResult> {
+	const refreshUrl = query?.version
+		? `/breaking-changes/report/refresh?version=${query.version}`
+		: '/breaking-changes/report/refresh';
+
+	return await makeRestApiRequest(context, 'POST', refreshUrl);
+}
+
+export async function getReportForRule(
+	context: IRestApiContext,
+	ruleId: string,
+): Promise<BreakingChangeRuleDetailResult> {
+	return (await get(context.baseUrl, `/breaking-changes/report/${ruleId}`)).data;
+}
+
+export async function assignWorkflowOwner(
+	context: IRestApiContext,
+	workflowId: string,
+	userId: string,
+): Promise<MigrationWorkflowOwnerResponse> {
+	return await makeRestApiRequest(
+		context,
+		'PUT',
+		`/breaking-changes/workflows/${workflowId}/owner`,
+		{ userId },
+	);
+}
+
+export async function unassignWorkflowOwner(
+	context: IRestApiContext,
+	workflowId: string,
+): Promise<MigrationWorkflowOwnerResponse> {
+	return await makeRestApiRequest(
+		context,
+		'DELETE',
+		`/breaking-changes/workflows/${workflowId}/owner`,
+	);
+}
+
+export async function migrateWorkflowForRule(
+	context: IRestApiContext,
+	ruleId: string,
+	workflowId: string,
+): Promise<WorkflowMigrationResult> {
+	return await makeRestApiRequest(
+		context,
+		'POST',
+		`/breaking-changes/report/${ruleId}/workflows/${workflowId}/migrate`,
+	);
+}
+
+export async function updateFindingStatus(
+	context: IRestApiContext,
+	ruleId: string,
+	workflowId: string,
+	status: MigrationFindingTriageStatus,
+): Promise<void> {
+	await makeRestApiRequest(
+		context,
+		'PATCH',
+		`/breaking-changes/report/${ruleId}/workflows/${workflowId}`,
+		{ status },
+	);
+}
