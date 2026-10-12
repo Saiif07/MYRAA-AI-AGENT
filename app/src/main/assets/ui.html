@@ -69,7 +69,8 @@ html,body{margin:0;height:100%;background:var(--bg);color:#fff;font-family:syste
    <button data-sheet="memory" aria-label="Memory"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"/></svg></button>
    <button data-sheet="tasks" aria-label="Tasks"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M9 20h6M12 16v4"/></svg></button>
    <button data-sheet="channels" aria-label="Telegram"><svg viewBox="0 0 24 24"><path d="M21 4L3 11l6 2 2 6 3-4 5 4z"/></svg></button>
-   <button data-sheet="settings" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></button>
+   <button data-sheet="automation" aria-label="Automation"><svg viewBox="0 0 24 24"><path d="M4 7h10M14 7l-2-2m2 2l-2 2M20 17H10m0 0l2-2m-2 2l2 2M7 7v10m10-10v10"/></svg></button>
+  <button data-sheet="settings" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></button>
   </div></div>
  <div id="cap"></div>
  <div id="bar"><input id="inp" placeholder="Type a message to MYRAA..." autocomplete="off" autocapitalize="sentences">
@@ -342,7 +343,7 @@ setInterval(function () {   // by itself: change dress every few minutes of calm
 }, 60000);
 
 /* ---- sheets */
-var ICON_SHEETS = ['modes', 'memory', 'tasks', 'channels', 'settings'];
+var ICON_SHEETS = ['modes', 'memory', 'tasks', 'channels', 'automation', 'settings'];
 var TG_ICON = '<svg class="ico" viewBox="0 0 48 48"><circle cx="24" cy="24" r="22" fill="#27A7E7"/><path d="M11 23.5l24-9.5-4 19-7-5.5-3.5 3.3-0.8-6.3 11-9.6-14 8.6z" fill="#ffffff"/></svg>';
 function openChannel(slug) {      // Telegram app first (native bridge); https link otherwise. Only the two known channels.
   var c = null; Core.CHANNELS.forEach(function (x) { if (x.slug === slug) c = x; });
@@ -379,13 +380,23 @@ function renderSheet() {
     h += '<button class="chip" data-act="stopAll">Stop everything</button>' + (NATIVE ? '<button class="chip" data-act="attach">Attach file</button>' : '') + '</div><h3>History</h3>';
     st.hist.slice(-30).forEach(function (m) { h += '<div class="msg' + (m.r === 'Aap' ? ' u' : '') + '">' + esc(m.t) + '</div>'; });
     if (!st.hist.length) h += '<p class="note">Abhi koi baat nahi hui.</p>';
-  } else if (st.sheet === 'settings') {
+  } else if (st.sheet === 'automation') {
+      var ns = NATIVE ? nativeJson('getSettings', {}) : {};
+      h += '<h3>Automation · n8n</h3>';
+      h += '<p class="note">Webhook URL aur optional token Settings mein save karo. n8n workflow ka Webhook node active hona chahiye.</p>';
+      h += '<input class="fld" id="n8n_event" placeholder="Event name (e.g. send_notification)" value="manual">';
+      h += '<textarea class="fld" id="n8n_payload" rows="4" placeholder="Workflow data as JSON">{}</textarea>';
+      h += '<button class="btn green" data-act="runN8n">Run workflow</button>';
+      h += '<p class="note" id="n8n_result">' + (ns.n8nUrl ? 'Webhook configured. Ready to test.' : 'Webhook URL not configured yet.') + '</p>';
+      h += '<button class="btn grey" data-act="openN8nSettings">Configure n8n</button>';
+    } else if (st.sheet === 'settings') {
     var s = NATIVE ? nativeJson('getSettings', {}) : { token: ls('token', '') };
     h += '<h3>Settings</h3>';
     if (NATIVE) {
       h += '<input class="fld" id="s_model" placeholder="Model  provider:model" value="' + esc(s.model || '') + '"><input class="fld" id="s_key" type="password" placeholder="' + (s.hasKey ? 'API key (saved)' : 'API key') + '">' +
         '<input class="fld" id="s_base" placeholder="Custom base URL (optional)" value="' + esc(s.base || '') + '"><input class="fld" id="s_tav" type="password" placeholder="' + (s.hasTavily ? 'Tavily key (saved)' : 'Tavily key (optional)') + '">' +
         '<input class="fld" id="s_url" placeholder="Backend URL (empty = standalone)" value="' + esc(s.url || '') + '"><input class="fld" id="s_tok" type="password" placeholder="' + (s.hasToken ? 'Backend token (saved)' : 'Backend token') + '">' +
+          '<h3>n8n Automation</h3><input class="fld" id="s_n8nUrl" placeholder="n8n Production Webhook URL" value="' + esc(s.n8nUrl || '') + '"><input class="fld" id="s_n8nToken" type="password" placeholder="' + (s.hasN8nToken ? 'n8n token saved (leave blank to keep)' : 'Optional n8n bearer token') + '">' +
         '<div class="row"><span>Voice-stop while speaking (beta)</span><button class="tg' + (s.voicestop ? ' on' : '') + '" data-tg="voicestop"></button></div>' +
         '<div class="row"><span>Auto-send messages (no confirmation)</span><button class="tg' + (s.autosend ? ' on' : '') + '" data-tg="autosend"></button></div>';
     } else {
@@ -408,7 +419,7 @@ function openSheet(n) { st.sheet = n; $('veil').style.display = 'block'; $('shee
 function closeSheet() { st.sheet = ''; $('veil').style.display = 'none'; $('sheet').style.display = 'none'; }
 function readSettings() {
   var o = { voicestop: sget('voicestop'), autosend: sget('autosend'), speak: st.speak };
-  ['model', 'key', 'base', 'tav', 'url', 'tok'].forEach(function (k) { var e = $('s_' + k); if (e) o[k] = e.value; });
+  ['model', 'key', 'base', 'tav', 'url', 'tok', 'n8nUrl', 'n8nToken'].forEach(function (k) { var e = $('s_' + k); if (e) o[k] = e.value; });
   return o;
 }
 var tmp = {};
@@ -429,6 +440,20 @@ $('sheet').addEventListener('click', function (e) {
     else { b.className = /\bon\b/.test(b.className) ? 'tg' : 'tg on'; }
   } else if ((v = b.getAttribute('data-act'))) {
     if (v === 'updates') openChannel(Core.UPDATES_SLUG);
+                              else if (v === 'openN8nSettings') openSheet('settings');
+                              else if (v === 'runN8n') {
+                                if (!NATIVE || !window.MyraaBridge || !window.MyraaBridge.triggerN8n) {
+                                  toast('n8n trigger Android app mein available hai'); return;
+                                }
+                                var ev = $('n8n_event'), pd = $('n8n_payload'), data;
+                                try { data = JSON.parse(pd ? pd.value : '{}'); }
+                                catch (err) { toast('Payload valid JSON hona chahiye'); return; }
+                                var payload = { event: (ev && ev.value || 'manual').trim() || 'manual',
+                                  data: data, source: 'MYRAA', timestamp: new Date().toISOString() };
+                                var out = $('n8n_result'); if (out) out.textContent = 'Workflow request bhej rahe hain...';
+                                try { window.MyraaBridge.triggerN8n(JSON.stringify(payload)); }
+                                catch (err) { if (out) out.textContent = 'Trigger start nahi hua.'; toast('n8n trigger fail'); }
+                              }
     else if (v === 'nextOutfit') UI.nextOutfit();
     else if (v === 'stopAll') stopAll();
     else if (v === 'attach') { try { window.MyraaBridge.attach(); } catch (x) { } }
@@ -540,7 +565,16 @@ function boot() {
   Avatar.setState('idle'); caption(HINT, true);
 }
 UI._state = st;
-UI.openSheet = openSheet;
+window.MyraaN8nResult = function (raw) {
+    var result;
+    try { result = JSON.parse(raw); } catch (e) { result = { ok: false, error: 'Invalid response' }; }
+    var el = $('n8n_result');
+    var msg = result.ok ? ('Workflow response received (HTTP ' + result.status + ').') :
+      ('Workflow failed: ' + (result.error || ('HTTP ' + (result.status || 'error'))));
+    if (el) el.textContent = msg;
+    toast(msg);
+  };
+  UI.openSheet = openSheet;
 boot();
 })();
 </script></body></html>

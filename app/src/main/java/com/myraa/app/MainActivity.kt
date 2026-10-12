@@ -54,6 +54,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             o.put("model", Cfg.get(c, "model", "gemini:gemini-flash-latest"))
             o.put("base", Cfg.get(c, "base"))
             o.put("url", Cfg.get(c, "url"))
+            o.put("n8nUrl", Cfg.get(c, "n8nUrl"))
+            o.put("hasN8nToken", Cfg.secret(c, "n8nToken").isNotEmpty())
             o.put("hasKey", Cfg.secret(c, "apikey").isNotEmpty())
             o.put("hasToken", Cfg.secret(c, "token").isNotEmpty())
             o.put("hasTavily", Cfg.secret(c, "tavily").isNotEmpty())
@@ -71,6 +73,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 if (o.has("model")) Cfg.put(c, "model", o.optString("model").trim().ifEmpty { "gemini:gemini-flash-latest" })
                 if (o.has("base")) Cfg.put(c, "base", o.optString("base").trim())
                 if (o.has("url")) Cfg.put(c, "url", o.optString("url").trim())
+            if (o.has("n8nUrl")) Cfg.put(c, "n8nUrl", o.optString("n8nUrl").trim())
+            if (o.optString("n8nToken").isNotBlank()) Cfg.putSecret(c, "n8nToken", o.optString("n8nToken").trim())
                 if (o.optString("key").isNotEmpty()) Cfg.putSecret(c, "apikey", o.optString("key").trim())
                 if (o.optString("tok").isNotEmpty()) Cfg.putSecret(c, "token", o.optString("tok").trim())
                 if (o.optString("tav").isNotEmpty()) Cfg.putSecret(c, "tavily", o.optString("tav").trim())
@@ -80,7 +84,57 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             } catch (e: Exception) { }
         }
 
-        @JavascriptInterface fun getMemory(): String {
+        @JavascriptInterface fun triggerN8n(payload: String) {
+        val c = applicationContext
+        Thread {
+            val result = JSONObject()
+            var connection: java.net.HttpURLConnection? = null
+            try {
+                val endpoint = Cfg.get(c, "n8nUrl").trim()
+                if (endpoint.isBlank()) throw IllegalStateException("Pehle Settings mein n8n Webhook URL save karo")
+                val uri = Uri.parse(endpoint)
+                val scheme = uri.scheme?.lowercase()
+                val host = uri.host?.lowercase()
+                val localHttp = scheme == "http" && (host == "localhost" || host == "127.0.0.1")
+                if (scheme != "https" && !localHttp) {
+                    throw IllegalArgumentException("Webhook URL HTTPS hona chahiye")
+                }
+                if (host.isNullOrBlank()) throw IllegalArgumentException("Webhook URL invalid hai")
+                connection = (java.net.URL(endpoint).openConnection() as java.net.HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    connectTimeout = 12000
+                    readTimeout = 20000
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                    setRequestProperty("Accept", "application/json, text/plain, */*")
+                    val token = Cfg.secret(c, "n8nToken")
+                    if (token.isNotBlank()) setRequestProperty("Authorization", "Bearer $token")
+                }
+                connection.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+                val code = connection.responseCode
+                val stream = if (code in 200..399) connection.inputStream else connection.errorStream
+                val body = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText().take(2500) } ?: ""
+                result.put("ok", code in 200..299)
+                result.put("status", code)
+                result.put("body", body)
+                if (code !in 200..299) result.put("error", "Webhook ne HTTP $code return kiya")
+            } catch (e: Exception) {
+                result.put("ok", false)
+                result.put("error", e.message ?: "Webhook request fail hua")
+            } finally {
+                connection?.disconnect()
+            }
+            val message = JSONObject.quote(result.toString())
+            runOnUiThread {
+                web?.evaluateJavascript(
+                    "if(window.MyraaN8nResult){window.MyraaN8nResult($message)}",
+                    null
+                )
+            }
+        }.start()
+    }
+
+    @JavascriptInterface fun getMemory(): String {
             val arr = JSONArray()
             for (m in Cfg.get(applicationContext, "mem").split("\n")) if (m.isNotBlank()) arr.put(m)
             return arr.toString()
